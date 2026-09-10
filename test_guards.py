@@ -4,11 +4,11 @@
 No model call -- these feed the mixer fabricated profiler output and assert the
 deterministic half holds. Run: python3 test_guards.py
 """
-import yaml, profile as P
+import json, yaml, profile as P
 
 cat = yaml.safe_load(open("mitigations.yaml"))
-raw = open("bundle-agt-2c81b4e7.yaml", "rb").read()
-b = yaml.safe_load(raw)
+raw = open("bundle-agt-2c81b4e7.json", "rb").read()
+b = json.loads(raw)
 caps, cov = P.caps_profiler(b), P.coverage_profiler(b)
 ok = lambda n, d: print(f"  PASS  {n:<37}{d}")
 

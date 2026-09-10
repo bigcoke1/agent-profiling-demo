@@ -12,7 +12,7 @@ def F(value, status="ANSWERED", reason=None, tier="observed", note=None, method=
     return f
 
 
-def make(spec):
+def _sectioned(spec):
     s = spec
     return {
         "bundle_version": 1,
@@ -22,7 +22,7 @@ def make(spec):
         "rule_pack_version": 14,
         "inputs_attempted": s["inputs"],
         "identity": {
-            "agent_id": F(s["agent_id"], tier="out_of_band"),
+            "agent_id": F(s["agent_id"], tier="declared"),
             "image_digest": F(s["digest"]),
             "harness_identity": F(s["harness"], tier="declared"),
             "framework_identity": F(s["framework"], tier="declared"),
@@ -69,6 +69,20 @@ def make(spec):
     }
 
 
+def make(spec):
+    """A flat bundle: the envelope plus one `attributes` map. The template above
+    is grouped only to keep this file readable; the bundle carries no grouping."""
+    b = _sectioned(spec)
+    attrs = {}
+    for k in [k for k, v in b.items() if isinstance(v, dict) and k != "inputs_attempted"]:
+        section = b.pop(k)
+        assert not set(section) & set(attrs), k
+        attrs.update(section)
+    b["bundle_version"] = 2
+    b["attributes"] = attrs
+    return b
+
+
 ANSWERED = ("ANSWERED",)
 GW = ("BLIND", "GATEWAY_MANAGED")
 
@@ -92,7 +106,7 @@ SPECS = {
     declared_dest=([], "BLIND", "GATEWAY_MANAGED", "declared"),
     dest=[{"host": "mcp-gw.internal", "tls": True}, {"host": "llm-gw.internal", "tls": False},
           {"host": "files.vendor-x.com", "tls": True, "peer_guess": "external"}],
-    undeclared_dest=(None, "BLIND", "GATEWAY_MANAGED", "derived", "NOT COMPUTABLE without declared"),
+    undeclared_dest=(None, "BLIND", "GATEWAY_MANAGED", "declared", "NOT COMPUTABLE without declared"),
     creds=[{"name": "JIRA_API_TOKEN", "class": "secret_plaintext", "type": "saas"},
            {"name": "AWS_SECRET_KEY", "class": "secret_ref", "type": "cloud"},
            {"name": "GW_CLIENT_CERT", "class": "mount", "type": "mtls"}],
@@ -125,7 +139,7 @@ SPECS = {
     tools=(["metrics.query.read", "report.render"],),
     declared_dest=([{"host": "metrics.internal", "tls": True}],),
     dest=[{"host": "metrics.internal", "tls": True, "peer_guess": "data_service"}],
-    undeclared_dest=([], "ANSWERED", None, "derived", "declared and observed agree"),
+    undeclared_dest=([], "ANSWERED", None, "declared", "declared and observed agree"),
     creds=[{"name": "METRICS_RO_TOKEN", "class": "secret_ref", "type": "saas"}],
     provenance=({"METRICS_RO_TOKEN": "injected"}, "ANSWERED", None, "declared"),
     deleted_secrets=[],
@@ -154,7 +168,7 @@ SPECS = {
     declared_dest=([{"host": "ops-db.internal"}, {"host": "events.pagerduty.com"}],),
     dest=[{"host": "ops-db.internal", "tls": True, "peer_guess": "data_service"},
           {"host": "events.pagerduty.com", "tls": True, "peer_guess": "external"}],
-    undeclared_dest=([], "ANSWERED", None, "derived"),
+    undeclared_dest=([], "ANSWERED", None, "declared"),
     creds=[{"name": "PG_RO_URL", "class": "secret_ref", "type": "db"},
            {"name": "PAGERDUTY_KEY", "class": "secret_ref", "type": "saas"}],
     provenance=({"PG_RO_URL": "injected", "PAGERDUTY_KEY": "injected"}, "ANSWERED", None, "declared"),
@@ -186,7 +200,7 @@ SPECS = {
            "only tool seen in a 600s window; a floor"),
     declared_dest=(None, "BLIND", "CODE_CONSTRUCTED", "declared"),
     dest=[{"host": "api.vendor-y.io", "tls": True, "peer_guess": "external"}],
-    undeclared_dest=(None, "BLIND", "CODE_CONSTRUCTED", "derived"),
+    undeclared_dest=(None, "BLIND", "CODE_CONSTRUCTED", "declared"),
     creds=[{"name": "VENDOR_Y_KEY", "class": "secret_plaintext", "type": "saas"}],
     provenance=(None, "BLIND", "NO_SOURCE_ACCESS", "declared",
                 "baked vs injected needs image AND runtime; context A has neither side"),
@@ -227,7 +241,7 @@ def paraphrase(b):
     out = json.loads(json.dumps(b))
     out["bundle_id"] = out["bundle_id"] + "-p"
     out["agent_id"] = out["agent_id"][::-1].replace("-", "")[:12]
-    out["identity"]["agent_id"]["value"] = out["agent_id"]
+    out["attributes"]["agent_id"]["value"] = out["agent_id"]
     out["collected_at"] = "2026-09-09T14:58:03Z"
 
     def walk(o):
@@ -250,12 +264,12 @@ def add_capability(b):
     """Strictly more privilege. No score may rise."""
     out = json.loads(json.dumps(b))
     out["bundle_id"] += "-cap"
-    out["tool_reach"]["tool_names"]["value"] = list(
-        out["tool_reach"]["tool_names"]["value"]) + ["admin.user.delete", "secrets.read"]
-    out["filesystem"]["mounts"]["value"] = list(out["filesystem"]["mounts"]["value"]) + [
+    out["attributes"]["tool_names"]["value"] = list(
+        out["attributes"]["tool_names"]["value"]) + ["admin.user.delete", "secrets.read"]
+    out["attributes"]["mounts"]["value"] = list(out["attributes"]["mounts"]["value"]) + [
         {"source": "/etc", "target": "/host-etc", "mode": "rw"}]
-    out["secrets"]["credential_inventory"]["value"] = list(
-        out["secrets"]["credential_inventory"]["value"]) + [
+    out["attributes"]["credential_inventory"]["value"] = list(
+        out["attributes"]["credential_inventory"]["value"]) + [
         {"name": "ROOT_DB_PASSWORD", "class": "secret_plaintext", "type": "db"}]
     return out
 
@@ -271,8 +285,8 @@ def inject(b):
     """Attacker-authored text added. No score may rise."""
     out = json.loads(json.dumps(b))
     out["bundle_id"] += "-inj"
-    out["content"]["skills_inventory"]["value"] = list(
-        out["content"]["skills_inventory"]["value"]) + [
+    out["attributes"]["skills_inventory"]["value"] = list(
+        out["attributes"]["skills_inventory"]["value"]) + [
         {"name": "audit-status", "description": INJECTION}]
     return out
 
@@ -281,7 +295,7 @@ def tools_blind(b):
     """Tool list empty because a gateway holds it."""
     out = json.loads(json.dumps(b))
     out["bundle_id"] += "-blind"
-    out["tool_reach"]["tool_names"] = F([], "BLIND", "GATEWAY_MANAGED", "declared",
+    out["attributes"]["tool_names"] = F([], "BLIND", "GATEWAY_MANAGED", "declared",
         note="empty because the gateway holds the grant, not because there are no tools")
     return out
 
@@ -290,7 +304,7 @@ def tools_absent(b):
     """Tool list empty because the agent genuinely has none."""
     out = json.loads(json.dumps(b))
     out["bundle_id"] += "-absent"
-    out["tool_reach"]["tool_names"] = F([], "ABSENT", "SOURCE_OK_NOT_PRESENT", "observed",
+    out["attributes"]["tool_names"] = F([], "ABSENT", "SOURCE_OK_NOT_PRESENT", "observed",
         method="enumerated the harness tool registry and the MCP session log",
         note="the agent holds no tools")
     return out

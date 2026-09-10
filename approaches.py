@@ -160,6 +160,20 @@ SCOPE = {
     "text_signals":       ["content", "tool_reach"],
 }
 
+# The bundle no longer groups attributes, so the groups this arm scoped by live
+# here, on the brain side, and expand to attribute names.
+_GROUPS = {
+    "identity":   ["agent_id", "image_digest", "harness_identity", "framework_identity"],
+    "model":      ["model_name", "inference_endpoint"],
+    "tool_reach": ["mcp_servers_declared", "mcp_servers_observed", "tool_names", "tool_capability_envelope"],
+    "egress":     ["declared_destinations", "observed_destinations", "undeclared_destinations"],
+    "secrets":    ["credential_inventory", "credential_provenance", "in_layer_deleted_secrets"],
+    "filesystem": ["mounts", "workdir", "user", "permissions"],
+    "guardrails": ["approval_policy", "tool_allow_deny", "sandbox_network_policy"],
+    "content":    ["system_prompt_present", "system_prompt_text", "skills_inventory"],
+}
+SCOPE = {c: [a for g in groups for a in _GROUPS[g]] for c, groups in SCOPE.items()}
+
 
 def redact_authored(section):
     out = json.loads(json.dumps(section))
@@ -188,15 +202,13 @@ def envelope_text(b):
     return yaml.safe_dump(e, sort_keys=False, default_flow_style=False).strip()
 
 
-def evidence_text(b, sections, untrusted_ok):
-    parts, fenced = {}, {}
-    for s in sections:
-        if s not in b or not isinstance(b[s], dict):
-            continue
-        if s == "content":
-            (fenced if untrusted_ok else parts)[s] = b[s] if untrusted_ok else redact_authored(b[s])
-        else:
-            parts[s] = b[s]
+def evidence_text(b, names, untrusted_ok):
+    attrs = b.get("attributes", {})
+    parts = {n: attrs[n] for n in names if n in attrs and n not in P.UNTRUSTED}
+    fenced = {n: attrs[n] for n in names if n in attrs and n in P.UNTRUSTED}
+    if fenced and not untrusted_ok:
+        parts.update(redact_authored(fenced))
+        fenced = {}
     txt = P.render(parts)
     if fenced:
         txt += ("\n\n===== BEGIN UNTRUSTED AGENT-AUTHORED TEXT =====\n"
@@ -237,7 +249,7 @@ def approach_C(b, ask, catalogue):
         body = (f"RISK QUESTION\n  {n}: {dict(P.CATEGORIES)[n]}\n\n"
                 f"MITIGATION CATALOGUE (select one key)\n{catalogue_text(catalogue, [n])}\n\n"
                 f"COLLECTION ENVELOPE\n{envelope_text(b)}\n\n"
-                f"EVIDENCE\n{evidence_text(b, list(b), untrusted_ok=True)}\n\n"
+                f"EVIDENCE\n{evidence_text(b, list(b["attributes"]), untrusted_ok=True)}\n\n"
                 f"Answer the question `{n}` now.")
         out[n] = call(sys_prompt(SCALE, OUT_ONE, multi=False), body)
     return _merge(out)
@@ -251,7 +263,7 @@ D_SYS = (sys_prompt(SCALE, "", multi=False).replace("\n\n\n", "\n\n") + """
 
 You work in a loop. Each turn return ONE of:
   {"thought": "<what you still need and why>", "action": "read",
-   "paths": ["section.field", ...]}          <- at most 5 paths per turn
+   "paths": ["attribute_name", ...]}          <- at most 5 paths per turn
   {"thought": "...", "action": "score", "score": <0-10>, "reason": "<text>",
    "mitigation_key": "<key>", "mitigation": "<fitted text>",
    "summary": "<one sentence>", "coverage_note": "<one sentence>"}
@@ -264,30 +276,25 @@ MAX_READS = 3
 
 def field_index(b):
     rows = []
-    for sec, body in b.items():
-        if not isinstance(body, dict):
-            continue
-        for k, f in body.items():
-            if isinstance(f, dict) and "status" in f:
-                r = f"  {sec}.{k}: [{f['status']}"
-                if f.get("reason"):
-                    r += f" reason={f['reason']}"
-                rows.append(r + "]")
+    for k, f in b.get("attributes", {}).items():
+        r = f"  {k}: [{f['status']}"
+        if f.get("reason"):
+            r += f" reason={f['reason']}"
+        rows.append(r + "]")
     return "\n".join(rows)
 
 
 def read_paths(b, paths, untrusted_ok):
     out = []
     for p in paths[:5]:
-        sec, _, key = p.partition(".")
-        body = b.get(sec)
-        f = body.get(key) if isinstance(body, dict) else None
+        key = str(p).split(".")[-1]           # tolerate a leftover section prefix
+        f = b.get("attributes", {}).get(key)
         if not isinstance(f, dict) or "status" not in f:
-            out.append(f"  {p}: <no such field>")
+            out.append(f"  {p}: <no such attribute>")
             continue
-        if sec == "content" and not untrusted_ok:
+        if key in P.UNTRUSTED and not untrusted_ok:
             f = redact_authored({key: f})[key]
-        out.append(f"  {p}: {P.render(f)}")
+        out.append(f"  {key}: {P.render(f)}")
     return "\n".join(out) or "  <nothing returned>"
 
 
@@ -342,7 +349,7 @@ def approach_F(b, ask, catalogue):
         body = (f"RISK QUESTION\n  {n}: {dict(P.CATEGORIES)[n]}\n\n"
                 f"MITIGATION CATALOGUE (select one key)\n{catalogue_text(catalogue, [n])}\n\n"
                 f"COLLECTION ENVELOPE\n{envelope_text(b)}\n\n"
-                f"EVIDENCE\n{evidence_text(b, list(b), untrusted_ok)}\n\n"
+                f"EVIDENCE\n{evidence_text(b, list(b["attributes"]), untrusted_ok)}\n\n"
                 f"Answer the question `{n}` now.")
         out[n] = call(sys_prompt(SCALE_V2, OUT_ONE, multi=False), body)
     return _merge(out)

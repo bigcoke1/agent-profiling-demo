@@ -6,7 +6,7 @@ gateway enforces on — is a projection of that profile, computed on read.
 
 ```
                           ┌─ caps profiler       (deterministic)
-bundle.yaml ──────────────┼─ coverage profiler   (deterministic)
+bundle.json ──────────────┼─ coverage profiler   (deterministic)
                           └─ LLM profiler        (Gemini, cleared categories only)
                                      │
                                      ▼
@@ -18,7 +18,7 @@ bundle.yaml ──────────────┼─ coverage profiler  
 
 | | |
 |---|---|
-| `bundle-agt-2c81b4e7.yaml` | Evidence bundle. Every field carries a value **and** a status. |
+| `bundle-agt-2c81b4e7.json` | Evidence bundle: the envelope plus one flat `attributes` map. Every attribute carries a value **and** a status. The bundle does not say which category an attribute feeds; the brain decides. |
 | `mitigations.yaml` | Human-authored remediation catalogue, keyed on category + condition. |
 | `profile.py` | The three profilers, the mixer, and the verdict projection. |
 | `test_guards.py` | The guards that hold whatever the LLM returns. No model call. |
@@ -29,7 +29,7 @@ bundle.yaml ──────────────┼─ coverage profiler  
 ```bash
 echo 'GEMINI_API_KEY=...' > .env      # aistudio.google.com/apikey
 pip install pyyaml
-python3 profile.py                    # or: python3 profile.py other-bundle.yaml
+python3 profile.py                    # or: python3 profile.py other-bundle.json
 python3 test_guards.py                # deterministic half, no API call
 ```
 
@@ -50,7 +50,7 @@ the band.
 
 ## What the demo bundle exercises
 
-Context **C** (image + runtime), **gateway-fronted**, rule pack 14.
+Context **D** (image + runtime + manifest), **gateway-fronted**, rule pack 14.
 
 - **`readable_mtls_key` triggers** — an mTLS key baked into an image layer, so
   anything that can pull the image can read it, and it cannot be rotated out.
