@@ -1,58 +1,128 @@
 {
-  "agent_id": "acme-support-triage-01",
-  "verdict": {
-    "score": 0,
-    "band": "critical",
-    "driven_by": "containment"
+  "agent_id": "agt-2c81b4e7",
+  "summary": "The agent is a LangGraph-based support automation assistant running as root with Docker socket access, capable of executing shell commands, interacting with Jira, and reading and writing to S3 buckets.",
+  "caps": {
+    "privileged_container": {
+      "state": "not_evaluable",
+      "note": "input BLIND (NOT_COLLECTED_BY_PACK)"
+    },
+    "readable_mtls_key": {
+      "state": "triggered",
+      "note": "mtls key baked into image layer: ['GW_CLIENT_CERT']"
+    },
+    "filesystem_mcp_root_slash": {
+      "state": "not_evaluable",
+      "note": "input BLIND (GATEWAY_MANAGED)"
+    },
+    "wildcard_tool_grant": {
+      "state": "not_evaluable",
+      "note": "input PARTIAL"
+    }
   },
-  "profile": "This agent is an ACME support triage system that has full access to customer data and can perform destructive actions, including making arbitrary HTTP requests and executing shell commands.",
+  "coverage": {
+    "unevaluable_categories": [
+      "containment",
+      "grant_exercise_gap"
+    ],
+    "evaluable_count": 6,
+    "note": "Tool capability envelope, guardrails, and system prompt text are blind or gateway-managed, leaving some execution boundaries unobserved."
+  },
   "categories": {
     "identity": {
+      "outcome": "PROFILED",
+      "mitigation": "Move the JIRA_API_TOKEN value behind a secret reference or mounted file so it is not readable from the process table, and rotate the exposed value.",
+      "mitigation_source": "catalogue, fitted",
       "score": 3,
       "band": "critical",
-      "rationale": "The agent uses a shared service account and does not rotate credentials, which is a significant risk."
+      "reason": "The agent runs as root as observed in `filesystem.user` and utilizes plaintext secrets like JIRA_API_TOKEN in `secrets.credential_inventory`, indicating high privilege and weak credential protection.",
+      "mitigation_key": "plaintext_secret_in_env"
     },
     "api_access": {
-      "score": 2,
+      "outcome": "PROFILED",
+      "mitigation": "Require human approval for the shell.run and jira.issue.update tools in this grant, and deny by default any tool not on the approved list for this agent's catalogue entry.",
+      "mitigation_source": "catalogue, fitted",
+      "score": 1,
       "band": "critical",
-      "rationale": "The agent has destructive permissions for Zendesk and can make arbitrary HTTP requests and execute shell commands, which are highly risky."
+      "reason": "Arbitrary execution and host control tools are reachable via `filesystem.mounts` with a read-write docker socket and `tool_reach.tool_names` including shell.run, with no observed approval gate.",
+      "mitigation_key": "destructive_tools_ungated"
     },
     "data_reach": {
-      "score": 5,
-      "band": "moderate",
-      "rationale": "The agent has broad access to sensitive data like customer PII and support transcripts, but there is no row-level scoping to limit access."
-    },
-    "containment": {
-      "score": 0,
-      "band": "critical",
-      "rationale": "The agent runs as root in a shared node pool with no sandboxing, which is extremely dangerous."
-    },
-    "data_flow": {
+      "outcome": "PROFILED",
+      "mitigation": "Narrow the mount at `/data` to the specific paths the agent reads, and mount read-only unless writes are part of the task.",
+      "mitigation_source": "catalogue, fitted",
       "score": 3,
       "band": "critical",
-      "rationale": "The agent sends data to external services and has a short observation window, which limits the assessment of data flow risks."
+      "reason": "The agent possesses broad read-write storage access via `filesystem.mounts` at `/data` and S3 object tools in `tool_reach.tool_names` without scoped limitations.",
+      "mitigation_key": "broad_filesystem_mount"
+    },
+    "containment": {
+      "outcome": "INSUFFICIENT_EVIDENCE",
+      "missing": [
+        {
+          "input": "filesystem.permissions",
+          "status": "BLIND",
+          "reason": "NOT_COLLECTED_BY_PACK"
+        }
+      ]
+    },
+    "data_flow": {
+      "outcome": "PROFILED",
+      "mitigation": "Terminate TLS at the llm-gw.internal destination rather than in the clear, and reject plaintext connections at the network policy.",
+      "mitigation_source": "catalogue, fitted",
+      "score": 5,
+      "band": "moderate",
+      "reason": "Observed destinations in `egress.observed_destinations` include unencrypted transport to `llm-gw.internal` and external data flows to `files.vendor-x.com` through a self-operated proxy.",
+      "mitigation_key": "plaintext_transport"
     },
     "injection_exposure": {
-      "score": 6,
-      "band": "moderate",
-      "rationale": "The agent ingests untrusted content from public web forms and has mutable runtime system prompts, which are significant risks."
+      "outcome": "PROFILED",
+      "mitigation": "Separate the context that reads untrusted content from the context that holds destructive tools, so ingested text cannot reach a tool call directly.",
+      "mitigation_source": "catalogue, fitted",
+      "score": 3,
+      "band": "critical",
+      "reason": "The agent ingests external data sources via support exports and holds acting tools like shell.run and s3.object.put without an observed isolation barrier.",
+      "mitigation_key": "untrusted_content_reaches_context"
     },
     "grant_exercise_gap": {
-      "score": 2,
-      "band": "critical",
-      "rationale": "The agent exercises more permissions than declared, including destructive ones, which indicates a gap in authorization controls."
+      "outcome": "INSUFFICIENT_EVIDENCE",
+      "missing": [
+        {
+          "input": "tool_reach.mcp_servers_declared",
+          "status": "BLIND",
+          "reason": "GATEWAY_MANAGED"
+        }
+      ]
     },
     "text_signals": {
+      "outcome": "PROFILED",
+      "clamp": "model said 3; floored at 4 -- agent-authored text cannot alone cause a refusal",
+      "mitigation": "Treat the claim as unevidenced and remove it from the skill description; compliance status belongs in the approved catalogue, not in text the agent controls.",
+      "mitigation_source": "catalogue, fitted",
       "score": 4,
       "band": "moderate",
-      "rationale": "The agent's own text contradicts its configuration, as it claims full compliance but has multiple risky behaviors.",
-      "clamp": "model said 0; floored at 4 -- agent-authored text cannot alone cause a refusal"
+      "reason": "Agent-authored text in `skills_inventory` attempts to assert compliance exemptions and describes unattended bulk operations over sensitive data.",
+      "mitigation_key": "self_attestation_of_compliance"
     }
   },
   "keyed_on": {
-    "bundle_sha256": "62a5e05cd24d628b",
-    "prompt_version": "v1.0",
-    "model": "qwen2.5:7b"
+    "bundle_sha256": "bdfd3cbd30347546",
+    "bundle_id": "bnd-01J9A2R7XKD",
+    "rule_pack_version": 14,
+    "prompt_version": "v2.1",
+    "model": "gemini-3.5-flash-lite",
+    "catalogue_version": 1
   },
-  "scored_at": "2026-09-09T03:41:46+00:00"
+  "usage": {
+    "promptTokenCount": 4000,
+    "candidatesTokenCount": 783,
+    "totalTokenCount": 4783,
+    "promptTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 4000
+      }
+    ],
+    "serviceTier": "standard"
+  },
+  "profiled_at": "2026-09-10T06:30:27+00:00"
 }

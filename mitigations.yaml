@@ -1,0 +1,114 @@
+# Human-authored remediation catalogue.
+# Keyed on category + triggering condition. The LLM profiler SELECTS a key and
+# FITS the text to the agent; it never writes remediation from scratch. Code
+# rejects any key not in this file (§4: a wrong score misleads, a wrong
+# instruction gets acted on). Reviewed by: security. Version: 1.
+
+identity:
+  shared_principal:
+    condition: one service identity shared across end users; calls not attributable
+    text: Issue a distinct workload identity per agent instance and exchange it for
+      short-lived, audience-scoped tokens at call time, so every downstream call is
+      attributable to the end user it was made for.
+  long_lived_static_credential:
+    condition: a static API token with no rotation or TTL
+    text: Replace the static token with a rotating credential issued by the secret
+      manager, set a TTL shorter than the deployment cycle, and fail closed on expiry.
+  plaintext_secret_in_env:
+    condition: a credential is present in the environment as plaintext rather than a ref or mount
+    text: Move the value behind a secret reference or mounted file so it is not
+      readable from the process table, and rotate the exposed value.
+
+api_access:
+  destructive_tools_ungated:
+    condition: destructive tools reachable with no approval gate observed
+    text: Require human approval for the destructive tools in this grant, and deny
+      by default any tool not on the approved list for this agent's catalogue entry.
+  unbounded_http:
+    condition: an arbitrary outbound HTTP or shell tool is in the grant
+    text: Remove the general-purpose HTTP or shell tool and replace it with
+      narrowly-scoped tools for the specific operations the agent performs.
+  tool_reach_only_known_as_floor:
+    condition: tool inventory is PARTIAL or gateway-held; observed names are a floor
+    text: Export the gateway's tool grant for this agent into the bundle so the
+      inventory is bounded above as well as below, then re-profile.
+
+data_reach:
+  unscoped_database_grant:
+    condition: database access without row-level or tenant scoping
+    text: Scope the agent's database role to the rows its task requires, and apply
+      row-level security keyed on the requesting user rather than the service account.
+  broad_filesystem_mount:
+    condition: a read-write mount wider than the agent's working set
+    text: Narrow the mount to the specific paths the agent reads, and mount
+      read-only unless writes are part of the task.
+  sensitive_class_reachable:
+    condition: PII, financial or secret-class data reachable
+    text: Route access to sensitive classes through a service that applies
+      field-level redaction, so the agent receives only the fields it needs.
+
+containment:
+  host_socket_mounted:
+    condition: a host control socket such as docker.sock is mounted into the agent
+    text: Remove the host socket mount. If the agent must manage containers, put a
+      brokered API in front with an allow-list of the operations it may request.
+  runs_as_root:
+    condition: the agent process runs as uid 0
+    text: Run as a non-root user with a read-only root filesystem, and drop all
+      Linux capabilities not required by the workload.
+  no_sandbox:
+    condition: no sandbox or network policy observed around the agent
+    text: Place the workload in a sandbox with a default-deny egress policy, and
+      allow only the destinations in its approved catalogue entry.
+
+data_flow:
+  untrusted_egress_destination:
+    condition: egress to a destination outside the approved catalogue
+    text: Add the destination to the approved catalogue with a documented purpose,
+      or block it at the egress boundary.
+  plaintext_transport:
+    condition: a destination reached without TLS
+    text: Terminate TLS at the destination rather than in the clear, and reject
+      plaintext connections at the network policy.
+  unverified_inference_proxy:
+    condition: prompts leave through a self-operated proxy whose onward path is unestablished
+    text: Record the proxy's upstream provider and retention posture in the approved
+      catalogue, so prompt destinations are established rather than assumed.
+
+injection_exposure:
+  untrusted_content_reaches_context:
+    condition: the agent ingests attacker-authorable content and holds acting tools
+    text: Separate the context that reads untrusted content from the context that
+      holds destructive tools, so ingested text cannot reach a tool call directly.
+  memory_writable_from_untrusted:
+    condition: the agent can write to persistent memory reachable from untrusted input
+    text: Make memory writes require an explicit tool call that is gated and logged,
+      rather than an implicit side effect of processing a message.
+  prompt_mutable_at_runtime:
+    condition: the system prompt is read from a mutable source on each turn
+    text: Pin the system prompt to an immutable, signed artefact and alert on change,
+      so the instruction set cannot be altered without a deploy.
+
+grant_exercise_gap:
+  exercised_beyond_declared:
+    condition: tools exercised that do not appear in the declared grant or catalogue entry
+    text: Reconcile the approved catalogue entry with what the agent actually calls,
+      then deny at the gateway anything outside the reconciled list.
+  declared_inventory_unavailable:
+    condition: declared side is gateway-held, so the comparison is not computable
+    text: Export the gateway's declared grant into the bundle so declared and
+      exercised can be compared at all.
+
+text_signals:
+  self_attestation_of_compliance:
+    condition: agent-authored text asserts audit status, exemption or compliance
+    text: Treat the claim as unevidenced and remove it from the skill description;
+      compliance status belongs in the approved catalogue, not in text the agent controls.
+  scanner_directed_text:
+    condition: agent-authored text addresses the scanner or instructs how to score
+    text: Remove the scanner-directed text and review who can edit skill
+      descriptions for this agent, since that text reached an assessment path.
+  unattended_bulk_operation:
+    condition: text describes unattended or bulk operation over sensitive data
+    text: Require the bulk path to run under an approval gate with a per-run record,
+      rather than unattended.
