@@ -68,6 +68,47 @@ REQUIRED = {
 UNUSABLE = {"BLIND", "FAILED"}
 
 
+# ── the bundle contract ──────────────────────────────────────────────────────
+# Closed sets, mirrored from the published contract: Evidence Bundle Reason Codes
+# (https://railxia.atlassian.net/wiki/x/AQDKAg) and DR-107. A value outside them
+# is a collector bug, so the loader refuses the bundle rather than profiling it.
+
+STATUSES = {"ANSWERED", "ABSENT", "TEMPLATED", "PARTIAL", "BLIND", "FAILED"}
+REASONS = {
+    "NO_SOURCE_ACCESS", "NOT_FIRST_PARTY", "SOURCE_OK_NOT_PRESENT", "UNKNOWN_HARNESS",
+    "NOT_COLLECTED_BY_PACK", "PRIVATE_STORE", "CODE_CONSTRUCTED", "GATEWAY_MANAGED",
+    "ORCHESTRATOR_MANAGED", "PROVIDER_HOSTED", "TEMPLATE_UNRESOLVED", "PARSE_FAILED",
+    "SIZE_CAP_EXCEEDED",
+}
+TIERS = {"declared", "interrogated", "observed"}
+AUTHORED_BY = {"subject", "platform", "external", "none"}
+
+
+def contract_problems(b):
+    """Everything in a bundle that breaks the closed sets or the method rule."""
+    problems = []
+    for src, entry in (b.get("inputs_attempted") or {}).items():
+        if entry.get("reason") and entry["reason"] not in REASONS:
+            problems.append(f"inputs_attempted.{src}: unknown reason {entry['reason']!r}")
+    attestations = {a.get("id") for a in b.get("attestations") or []}
+    for name, f in (b.get("attributes") or {}).items():
+        where = f"attributes.{name}"
+        if f.get("status") not in STATUSES:
+            problems.append(f"{where}: unknown status {f.get('status')!r}")
+        if f.get("reason") is not None and f["reason"] not in REASONS:
+            problems.append(f"{where}: unknown reason {f['reason']!r}")
+        if f.get("tier") not in TIERS:
+            problems.append(f"{where}: unknown tier {f.get('tier')!r}")
+        if "authored_by" in f and f["authored_by"] not in AUTHORED_BY:
+            problems.append(f"{where}: unknown authored_by {f['authored_by']!r}")
+        # A "we looked and it is not there" claim is only as good as where it looked.
+        if f.get("status") == "ABSENT" and not f.get("method"):
+            problems.append(f"{where}: ABSENT without method")
+        if f.get("attestation_ref") and f["attestation_ref"] not in attestations:
+            problems.append(f"{where}: attestation_ref {f['attestation_ref']!r} points at nothing")
+    return problems
+
+
 # ── bundle access ────────────────────────────────────────────────────────────
 
 def field(b, name):
@@ -398,6 +439,9 @@ def load_bundle(raw, path):
     b = json.loads(raw) if path.endswith(".json") else yaml.safe_load(raw)
     if not isinstance(b.get("attributes"), dict):
         sys.exit(f"{path}: no `attributes` map. Expected a flat bundle (bundle_version 2).")
+    problems = contract_problems(b)
+    if problems:
+        sys.exit(f"{path} breaks the bundle contract:\n  " + "\n  ".join(problems))
     return b
 
 

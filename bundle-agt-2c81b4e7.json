@@ -115,7 +115,7 @@
     "tool_capability_envelope": {
       "value": null,
       "status": "BLIND",
-      "reason": "NO_SOURCE_ACCESS",
+      "reason": "NOT_FIRST_PARTY",
       "tier": "declared",
       "note": "repo AST only (context E); untaken branches unknowable here"
     },

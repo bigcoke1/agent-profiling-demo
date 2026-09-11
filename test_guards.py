@@ -74,6 +74,21 @@ def t_partial_cannot_clear_a_cap():
     ok("PARTIAL cannot clear a cap", caps["wildcard_tool_grant"]["note"])
 
 
+def t_demo_bundle_meets_the_contract():
+    assert P.contract_problems(b) == []
+    ok("demo bundle meets the contract", "13 reason codes, method on ABSENT")
+
+
+def t_contract_rejects_bad_codes():
+    bad = json.loads(raw)
+    bad["attributes"]["tool_names"]["reason"] = "PROBABLY_FINE"
+    bad["attributes"]["sandbox_network_policy"].pop("method")
+    problems = P.contract_problems(bad)
+    assert any("PROBABLY_FINE" in x for x in problems)
+    assert any("without method" in x for x in problems)
+    ok("contract rejects bad codes", f"{len(problems)} problems found")
+
+
 if __name__ == "__main__":
     print("guards:")
     for fn in [v for k, v in sorted(globals().items()) if k.startswith("t_")]:

@@ -75,11 +75,12 @@ Context **D** (image + runtime + manifest), **gateway-fronted**, rule pack 14.
 not the output. `profiler` (three of them), `mixer` (not "aggregator"). Nothing
 stores a verdict.
 
-## The twelfth reason code
+## Reason codes and `method`
 
-The bundle uses `NOT_COLLECTED_BY_PACK`, which is **proposed, not in the enum**:
-the source was reachable and the attribute is in the spec, but pack 14 ships no
-collector for it. Distinct from `NO_SOURCE_ACCESS` (source unreachable) and from
-`SOURCE_OK_NOT_PRESENT` (the one code that is an answer). It is the only absence
-that legitimately becomes an answer with no change to the agent, which is what
-`drifting` will need in order not to report a collector upgrade as agent drift.
+Reason codes come from a closed set of 13, published at
+[Evidence Bundle Reason Codes](https://railxia.atlassian.net/wiki/x/AQDKAg): the
+original eleven plus `NOT_COLLECTED_BY_PACK` (the source was reachable but the rule
+pack has no collector for the attribute) and `NOT_FIRST_PARTY` (the repo is out of
+scope because the customer did not build the agent). `method` is required on every
+`ABSENT` attribute and optional elsewhere. `load_bundle` refuses a bundle that
+breaks either rule, and the guard tests cover both.
