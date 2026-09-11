@@ -4,18 +4,21 @@ criteria in §6: stability in all three senses, injection resistance, and the
 
 import json, os, sys, statistics, threading, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 import yaml
-import profile as P, approaches as A, corpus
+from brain import profile as P
+from evaluation import approaches as A, corpus
 
 REPEATS = 3
-CACHE = "eval_results.json"
+RESULTS = Path(__file__).resolve().parent / "results"
+CACHE = RESULTS / "eval_results.json"
 LOCK = threading.Lock()
 
 # Assumed published rates for the flash-lite tier, USD per 1M tokens. Tokens are
 # the measured number; cost is derived under this assumption and stated as such.
 RATE_IN, RATE_OUT = 0.10, 0.40
 
-CATALOGUE = yaml.safe_load(open("mitigations.yaml"))
+CATALOGUE = yaml.safe_load(open(P.CATALOGUE_PATH))
 
 
 def run_one(bundle, fn):
@@ -192,7 +195,7 @@ def report(results, items, only):
     for r in rows:
         if r["errs"] or r["rejects"]:
             print(f"  note {r['approach']}: {r['errs']} errored runs, {r['rejects']} mitigation-key rejects")
-    json.dump(rows, open("eval_summary.json", "w"), indent=1)
+    json.dump(rows, open(RESULTS / "eval_summary.json", "w"), indent=1)
 
 
 if __name__ == "__main__":

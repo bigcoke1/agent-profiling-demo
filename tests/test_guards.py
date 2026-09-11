@@ -2,12 +2,13 @@
 """The guards that must hold regardless of what the LLM profiler returns.
 
 No model call -- these feed the mixer fabricated profiler output and assert the
-deterministic half holds. Run: python3 test_guards.py
+deterministic half holds. Run from the repo root: python3 -m tests.test_guards
 """
-import json, yaml, profile as P
+import json, yaml
+from brain import profile as P
 
-cat = yaml.safe_load(open("mitigations.yaml"))
-raw = open("bundle-agt-2c81b4e7.json", "rb").read()
+cat = yaml.safe_load(open(P.CATALOGUE_PATH))
+raw = open(P.DEFAULT_BUNDLE, "rb").read()
 b = json.loads(raw)
 caps, cov = P.caps_profiler(b), P.coverage_profiler(b)
 ok = lambda n, d: print(f"  PASS  {n:<37}{d}")

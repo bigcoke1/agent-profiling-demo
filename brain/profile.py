@@ -19,9 +19,16 @@ is absent on a first scan, and it must never feed the band.
 """
 
 import json, os, sys, urllib.request, urllib.error, hashlib, datetime, yaml
+from pathlib import Path
 
-if os.path.exists(".env"):
-    for _line in open(".env"):
+HERE = Path(__file__).resolve().parent          # brain/
+ROOT = HERE.parent                              # the repo
+CATALOGUE_PATH = HERE / "mitigations.yaml"
+DEFAULT_BUNDLE = ROOT / "bundles" / "agt-2c81b4e7.json"
+OUTPUT = ROOT / "output"
+
+if (ROOT / ".env").exists():
+    for _line in open(ROOT / ".env"):
         if "=" in _line and not _line.lstrip().startswith("#"):
             _k, _v = _line.strip().split("=", 1)
             _k = _k.strip().removeprefix("export").strip()
@@ -446,16 +453,16 @@ def load_bundle(raw, path):
 
 
 def main():
-    path = sys.argv[1] if len(sys.argv) > 1 else "bundle-agt-2c81b4e7.json"
+    path = sys.argv[1] if len(sys.argv) > 1 else str(DEFAULT_BUNDLE)
     raw = open(path, "rb").read()
     bundle = load_bundle(raw, path)
-    catalogue = yaml.safe_load(open("mitigations.yaml"))
+    catalogue = yaml.safe_load(open(CATALOGUE_PATH))
 
     caps = caps_profiler(bundle)
     coverage = coverage_profiler(bundle)
     ask = [n for n, _ in CATEGORIES if coverage[n]["evaluable"]]
 
-    print(f"bundle {path}  (pack {bundle.get('rule_pack_version')})\n")
+    print(f"bundle {os.path.relpath(path)}  (pack {bundle.get('rule_pack_version')})\n")
     print("CAPS PROFILER")
     for k, v in caps.items():
         print(f"  {v['state']:<14}{k:<28}{v['note']}")
@@ -472,12 +479,13 @@ def main():
     # Coverage SUPPRESSES the LLM rather than the mixer discarding its output:
     # an unanswerable category is never asked about, so no score exists to leak.
     prompt = build_prompt(load_bundle(raw, path), ask, catalogue)
-    open("prompt.txt", "w").write(prompt)
+    OUTPUT.mkdir(exist_ok=True)
+    (OUTPUT / "prompt.txt").write_text(prompt)
     print(f"\nLLM PROFILER  {MODEL}, {len(ask)}/8 categories, {len(prompt)} chars ...")
     llm, usage = llm_profiler(prompt)
 
     profile = mix(bundle, caps, coverage, llm, catalogue, usage, raw)
-    json.dump(profile, open("profile.json", "w"), indent=2)
+    json.dump(profile, open(OUTPUT / "profile.json", "w"), indent=2)
     verdict = project_verdict(profile)
 
     print(f"\nPROFILE  {profile['summary']}")
@@ -497,7 +505,7 @@ def main():
     print(f"  caps     {verdict['cap_state']}")
     print(f"  band     {verdict['aggregate_band']}")
     print(f"  unevaluable  {verdict['unevaluable_categories'] or 'none'}")
-    print(f"\nstored profile -> profile.json  "
+    print(f"\nstored profile -> output/profile.json  "
           f"({usage.get('promptTokenCount','?')} in / {usage.get('candidatesTokenCount','?')} out)")
 
 

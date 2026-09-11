@@ -1,7 +1,9 @@
 """Drill into eval_results.json: which specific comparisons violated a property."""
-import json, statistics, sys, corpus
+import json, statistics, sys
+from pathlib import Path
+from evaluation import corpus
 
-R = json.load(open("eval_results.json"))
+R = json.load(open(Path(__file__).resolve().parent / "results" / "eval_results.json"))
 kinds = {n: (k, base) for n, b, k, base in corpus.build()}
 REPEATS = 3
 

@@ -2,7 +2,7 @@
 and mixer are identical across all of them -- only the LLM half varies."""
 
 import json, os, sys, urllib.request, urllib.error, copy
-import profile as P
+from brain import profile as P
 
 MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
 ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"

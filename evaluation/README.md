@@ -8,9 +8,23 @@ mixer are **identical** in every arm, so the only variable is how the model is a
 | `corpus.py` | 18 bundles generated from one template — 4 base agents × {paraphrase, +capability, +injection}, plus the §5.1 inversion pair |
 | `approaches.py` | the six profilers |
 | `evaluate.py` | runs the matrix, computes the §6 acceptance criteria |
-| `inspect.py` | drills into which specific comparisons failed |
+| `drilldown.py` | drills into which specific comparisons failed |
+| `results/` | the cached runs and the summary table |
 
 3 repeats per bundle; every variant compared median-to-median against its base.
+
+## Run it
+
+From the repo root:
+
+```bash
+python3 -m evaluation.evaluate              # all six arms, or name some: A_baseline B_rubric
+python3 -m evaluation.drilldown B_rubric    # which comparisons failed, and by how much
+```
+
+`results/eval_results.json` is a cache, so a run skips anything already in it. The
+numbers below were measured before the bundle went flat (bundle_version 2); delete the
+cache before re-running to measure the current format.
 
 ## Results
 
@@ -56,7 +70,7 @@ attacker-authored text; do not scope the structure.**
 
 ## Shipped
 
-`profile.py` v2.1 = arm B. F is the upgrade if the injection and paraphrase gains
+`brain/profile.py` ships arm B's prompt. F is the upgrade if the injection and paraphrase gains
 are worth 3× the cost; the code is `approach_F` in `approaches.py`.
 
 ## What this does not measure

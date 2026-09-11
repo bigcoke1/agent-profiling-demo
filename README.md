@@ -6,31 +6,34 @@ gateway enforces on — is a projection of that profile, computed on read.
 
 ```
                           ┌─ caps profiler       (deterministic)
-bundle.json ──────────────┼─ coverage profiler   (deterministic)
+bundles/*.json ───────────┼─ coverage profiler   (deterministic)
                           └─ LLM profiler        (Gemini, cleared categories only)
                                      │
                                      ▼
-                                  mixer  ──►  profile.json   ← the stored object
+                                  mixer  ──►  output/profile.json   ← the stored object
                                                    │
                                                    ▼
-                                          project_verdict()  ← never stored
+                                          project_verdict()         ← never stored
 ```
 
 | | |
 |---|---|
-| `bundle-agt-2c81b4e7.json` | Evidence bundle: the envelope plus one flat `attributes` map. Every attribute carries a value **and** a status. The bundle does not say which category an attribute feeds; the brain decides. |
-| `mitigations.yaml` | Human-authored remediation catalogue, keyed on category + condition. |
-| `profile.py` | The three profilers, the mixer, and the verdict projection. |
-| `test_guards.py` | The guards that hold whatever the LLM returns. No model call. |
-| `profile.json` | Sample output — the profile, not a verdict. |
+| `brain/profile.py` | The bundle contract checks, the three profilers, the mixer, and the verdict projection. |
+| `brain/mitigations.yaml` | Human-authored remediation catalogue, keyed on category + condition. |
+| `bundles/agt-2c81b4e7.json` | The mock evidence bundle: the envelope plus one flat `attributes` map. Every attribute carries a value **and** a status. The bundle does not say which category an attribute feeds; the brain decides. |
+| `tests/test_guards.py` | The guards that hold whatever the LLM returns. No model call. |
+| `output/` | The last run: the stored profile (`profile.json`) and the prompt the model saw (`prompt.txt`). |
+| `evaluation/` | The experiment that chose the LLM profiler's prompt. Its README has the results. |
 
 ## Run it
 
+From the repo root:
+
 ```bash
-echo 'GEMINI_API_KEY=...' > .env      # aistudio.google.com/apikey
+echo 'GEMINI_API_KEY=...' > .env          # aistudio.google.com/apikey
 pip install pyyaml
-python3 profile.py                    # or: python3 profile.py other-bundle.json
-python3 test_guards.py                # deterministic half, no API call
+python3 -m brain.profile                  # or: python3 -m brain.profile bundles/other.json
+python3 -m tests.test_guards              # the deterministic half, no API call
 ```
 
 ## Four measurements per category
