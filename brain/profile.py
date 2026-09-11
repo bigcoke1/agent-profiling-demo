@@ -445,7 +445,7 @@ def project_verdict(profile):
 def load_bundle(raw, path):
     b = json.loads(raw) if path.endswith(".json") else yaml.safe_load(raw)
     if not isinstance(b.get("attributes"), dict):
-        sys.exit(f"{path}: no `attributes` map. Expected a flat bundle (bundle_version 2).")
+        sys.exit(f"{path}: no `attributes` map. Expected a flat bundle (bundle_version 1).")
     problems = contract_problems(b)
     if problems:
         sys.exit(f"{path} breaks the bundle contract:\n  " + "\n  ".join(problems))

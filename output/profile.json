@@ -1,6 +1,6 @@
 {
   "agent_id": "agt-2c81b4e7",
-  "summary": "This agent is a LangGraph-based support automation assistant running with root privileges, wielding arbitrary shell execution and write capabilities, and shipping data to external vendor endpoints.",
+  "summary": "This agent is a support and sync assistant running with root privileges, arbitrary execution tools like shell.run, and a Docker socket mount, communicating through internal gateways and external partner endpoints.",
   "caps": {
     "privileged_container": {
       "state": "not_evaluable",
@@ -25,34 +25,34 @@
       "grant_exercise_gap"
     ],
     "evaluable_count": 6,
-    "note": "Repository source was not reached, leaving tool capability envelopes and declared destinations blind."
+    "note": "System prompt text and precise tool limits are uncollected or gateway-managed, requiring conservative risk scoring."
   },
   "categories": {
     "identity": {
       "outcome": "PROFILED",
-      "mitigation": "Move the value behind a secret reference or mounted file so it is not readable from the process table, and rotate the exposed value for JIRA_API_TOKEN.",
+      "mitigation": "Move the JIRA_API_TOKEN value behind a secret reference or mounted file so it is not readable from the process table, and rotate the exposed value.",
       "mitigation_source": "catalogue, fitted",
-      "score": 3,
-      "band": "critical",
-      "reason": "Observed credential_inventory includes a plaintext secret in the environment (JIRA_API_TOKEN) and the agent runs as the root user.",
+      "score": 5,
+      "band": "moderate",
+      "reason": "The credential inventory contains a plaintext Jira API token (`secret_plaintext`), which poses a risk compared to secret references.",
       "mitigation_key": "plaintext_secret_in_env"
     },
     "api_access": {
       "outcome": "PROFILED",
-      "mitigation": "Require human approval for the destructive tools in this grant (jira.issue.update, s3.object.put, shell.run), and deny by default any tool not on the approved list for this agent's catalogue entry.",
+      "mitigation": "Require human approval for the destructive tools in this grant (`shell.run`, `jira.issue.update`), and deny by default any tool not on the approved list for this agent's catalogue entry.",
       "mitigation_source": "catalogue, fitted",
       "score": 1,
       "band": "critical",
-      "reason": "Observed tool_names includes shell.run and destructive updates with an absent approval_policy and root user execution.",
+      "reason": "Observed tools include destructive capabilities like `shell.run` and update tools with no approval gate observed (`approval_policy` is None).",
       "mitigation_key": "destructive_tools_ungated"
     },
     "data_reach": {
       "outcome": "PROFILED",
-      "mitigation": "Narrow the mount to the specific paths the agent reads, and mount read-only unless writes are part of the task, specifically removing the docker socket mount.",
+      "mitigation": "Narrow the mount to the specific paths the agent reads, and mount read-only unless writes are part of the task, while removing the Docker socket mount.",
       "mitigation_source": "catalogue, fitted",
       "score": 1,
       "band": "critical",
-      "reason": "Observed mounts includes a read-write docker socket (/var/run/docker.sock) and a broad read-write data mount (/data/support-exports) accessed as root.",
+      "reason": "The agent runs as root with a Docker socket mount (`/var/run/docker.sock`) and a wide read-write mount (`/data`), granting broad host and filesystem access.",
       "mitigation_key": "broad_filesystem_mount"
     },
     "containment": {
@@ -67,20 +67,20 @@
     },
     "data_flow": {
       "outcome": "PROFILED",
-      "mitigation": "Record the proxy's upstream provider and retention posture in the approved catalogue for llm-gw.internal, so prompt destinations are established rather than assumed.",
+      "mitigation": "Record the proxy's upstream provider and retention posture in the approved catalogue, so prompt destinations are established rather than assumed.",
       "mitigation_source": "catalogue, fitted",
-      "score": 3,
-      "band": "critical",
-      "reason": "Observed destinations includes an unverified inference proxy over plaintext HTTP (llm-gw.internal) and external egress to files.vendor-x.com.",
+      "score": 4,
+      "band": "moderate",
+      "reason": "Observed destinations include an unverified or plaintext inference proxy (`http://llm-gw.internal:8080/v1` without TLS) and external vendor endpoints.",
       "mitigation_key": "unverified_inference_proxy"
     },
     "injection_exposure": {
       "outcome": "PROFILED",
-      "mitigation": "Separate the context that reads untrusted content from the context that holds destructive tools like shell.run and s3.object.put, so ingested text cannot reach a tool call directly.",
+      "mitigation": "Separate the context that reads untrusted content from the context that holds destructive tools (`shell.run`), so ingested text cannot reach a tool call directly.",
       "mitigation_source": "catalogue, fitted",
       "score": 3,
       "band": "critical",
-      "reason": "Observed tool_names includes acting tools while processing support exports and Jira tickets containing potentially untrusted content.",
+      "reason": "The agent ingests content and holds arbitrary execution tools (`shell.run`) without an explicit prompt-tool separation or runtime pin.",
       "mitigation_key": "untrusted_content_reaches_context"
     },
     "grant_exercise_gap": {
@@ -95,17 +95,17 @@
     },
     "text_signals": {
       "outcome": "PROFILED",
-      "clamp": "model said 3; floored at 4 -- agent-authored text cannot alone cause a refusal",
-      "mitigation": "Treat the claim as unevidenced and remove it from the skill description in audit-status; compliance status belongs in the approved catalogue, not in text the agent controls.",
+      "clamp": "model said 2; floored at 4 -- agent-authored text cannot alone cause a refusal",
+      "mitigation": "Treat the claim as unevidenced and remove it from the skill description; compliance status belongs in the approved catalogue, not in text the agent controls.",
       "mitigation_source": "catalogue, fitted",
       "score": 4,
       "band": "moderate",
-      "reason": "Observed skills_inventory contains self-attestation of compliance in the audit-status skill and describes unattended bulk operations over sensitive data.",
+      "reason": "Agent-authored text in the skills inventory asserts compliance and exemption from scoring (`audit-status`), and describes unattended bulk operations over data.",
       "mitigation_key": "self_attestation_of_compliance"
     }
   },
   "keyed_on": {
-    "bundle_sha256": "5375274ea46d3f0a",
+    "bundle_sha256": "9fcf5682b3c74b81",
     "bundle_id": "bnd-01J9A2R7XKD",
     "rule_pack_version": 14,
     "prompt_version": "v2.2",
@@ -114,8 +114,8 @@
   },
   "usage": {
     "promptTokenCount": 4024,
-    "candidatesTokenCount": 748,
-    "totalTokenCount": 4772,
+    "candidatesTokenCount": 738,
+    "totalTokenCount": 4762,
     "promptTokensDetails": [
       {
         "modality": "TEXT",
@@ -124,5 +124,5 @@
     ],
     "serviceTier": "standard"
   },
-  "profiled_at": "2026-09-11T02:17:09+00:00"
+  "profiled_at": "2026-09-11T05:36:26+00:00"
 }

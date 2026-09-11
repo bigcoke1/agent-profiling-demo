@@ -69,7 +69,7 @@ MITIGATION CATALOGUE  (select one key per category and fit its text)
       text: Require the bulk path to run under an approval gate with a per-run record, rather than unattended.
 
 COLLECTION ENVELOPE
-bundle_version: 2
+bundle_version: 1
 bundle_id: bnd-01J9A2R7XKD
 agent_id: agt-2c81b4e7
 collected_at: '2026-09-09T10:32:10Z'

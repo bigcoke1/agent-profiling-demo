@@ -23,8 +23,8 @@ python3 -m evaluation.drilldown B_rubric    # which comparisons failed, and by h
 ```
 
 `results/eval_results.json` is a cache, so a run skips anything already in it. The
-numbers below were measured before the bundle went flat (bundle_version 2); delete the
-cache before re-running to measure the current format.
+numbers below were measured before the bundle went flat; delete the cache before
+re-running to measure the current format.
 
 ## Results
 

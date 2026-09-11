@@ -78,7 +78,6 @@ def make(spec):
         section = b.pop(k)
         assert not set(section) & set(attrs), k
         attrs.update(section)
-    b["bundle_version"] = 2
     b["attributes"] = attrs
     return b
 
