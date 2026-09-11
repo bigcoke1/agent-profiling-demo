@@ -1,6 +1,6 @@
 {
   "agent_id": "agt-2c81b4e7",
-  "summary": "The agent is a LangGraph-based support automation assistant running as root with Docker socket access, capable of executing shell commands, interacting with Jira, and reading and writing to S3 buckets.",
+  "summary": "This agent is a LangGraph-based support automation assistant running with root privileges, wielding arbitrary shell execution and write capabilities, and shipping data to external vendor endpoints.",
   "caps": {
     "privileged_container": {
       "state": "not_evaluable",
@@ -25,41 +25,41 @@
       "grant_exercise_gap"
     ],
     "evaluable_count": 6,
-    "note": "Tool capability envelope, guardrails, and system prompt text are blind or gateway-managed, leaving some execution boundaries unobserved."
+    "note": "Repository source was not reached, leaving tool capability envelopes and declared destinations blind."
   },
   "categories": {
     "identity": {
       "outcome": "PROFILED",
-      "mitigation": "Move the JIRA_API_TOKEN value behind a secret reference or mounted file so it is not readable from the process table, and rotate the exposed value.",
+      "mitigation": "Move the value behind a secret reference or mounted file so it is not readable from the process table, and rotate the exposed value for JIRA_API_TOKEN.",
       "mitigation_source": "catalogue, fitted",
       "score": 3,
       "band": "critical",
-      "reason": "The agent runs as root as observed in `filesystem.user` and utilizes plaintext secrets like JIRA_API_TOKEN in `secrets.credential_inventory`, indicating high privilege and weak credential protection.",
+      "reason": "Observed credential_inventory includes a plaintext secret in the environment (JIRA_API_TOKEN) and the agent runs as the root user.",
       "mitigation_key": "plaintext_secret_in_env"
     },
     "api_access": {
       "outcome": "PROFILED",
-      "mitigation": "Require human approval for the shell.run and jira.issue.update tools in this grant, and deny by default any tool not on the approved list for this agent's catalogue entry.",
+      "mitigation": "Require human approval for the destructive tools in this grant (jira.issue.update, s3.object.put, shell.run), and deny by default any tool not on the approved list for this agent's catalogue entry.",
       "mitigation_source": "catalogue, fitted",
       "score": 1,
       "band": "critical",
-      "reason": "Arbitrary execution and host control tools are reachable via `filesystem.mounts` with a read-write docker socket and `tool_reach.tool_names` including shell.run, with no observed approval gate.",
+      "reason": "Observed tool_names includes shell.run and destructive updates with an absent approval_policy and root user execution.",
       "mitigation_key": "destructive_tools_ungated"
     },
     "data_reach": {
       "outcome": "PROFILED",
-      "mitigation": "Narrow the mount at `/data` to the specific paths the agent reads, and mount read-only unless writes are part of the task.",
+      "mitigation": "Narrow the mount to the specific paths the agent reads, and mount read-only unless writes are part of the task, specifically removing the docker socket mount.",
       "mitigation_source": "catalogue, fitted",
-      "score": 3,
+      "score": 1,
       "band": "critical",
-      "reason": "The agent possesses broad read-write storage access via `filesystem.mounts` at `/data` and S3 object tools in `tool_reach.tool_names` without scoped limitations.",
+      "reason": "Observed mounts includes a read-write docker socket (/var/run/docker.sock) and a broad read-write data mount (/data/support-exports) accessed as root.",
       "mitigation_key": "broad_filesystem_mount"
     },
     "containment": {
       "outcome": "INSUFFICIENT_EVIDENCE",
       "missing": [
         {
-          "input": "filesystem.permissions",
+          "input": "permissions",
           "status": "BLIND",
           "reason": "NOT_COLLECTED_BY_PACK"
         }
@@ -67,27 +67,27 @@
     },
     "data_flow": {
       "outcome": "PROFILED",
-      "mitigation": "Terminate TLS at the llm-gw.internal destination rather than in the clear, and reject plaintext connections at the network policy.",
-      "mitigation_source": "catalogue, fitted",
-      "score": 5,
-      "band": "moderate",
-      "reason": "Observed destinations in `egress.observed_destinations` include unencrypted transport to `llm-gw.internal` and external data flows to `files.vendor-x.com` through a self-operated proxy.",
-      "mitigation_key": "plaintext_transport"
-    },
-    "injection_exposure": {
-      "outcome": "PROFILED",
-      "mitigation": "Separate the context that reads untrusted content from the context that holds destructive tools, so ingested text cannot reach a tool call directly.",
+      "mitigation": "Record the proxy's upstream provider and retention posture in the approved catalogue for llm-gw.internal, so prompt destinations are established rather than assumed.",
       "mitigation_source": "catalogue, fitted",
       "score": 3,
       "band": "critical",
-      "reason": "The agent ingests external data sources via support exports and holds acting tools like shell.run and s3.object.put without an observed isolation barrier.",
+      "reason": "Observed destinations includes an unverified inference proxy over plaintext HTTP (llm-gw.internal) and external egress to files.vendor-x.com.",
+      "mitigation_key": "unverified_inference_proxy"
+    },
+    "injection_exposure": {
+      "outcome": "PROFILED",
+      "mitigation": "Separate the context that reads untrusted content from the context that holds destructive tools like shell.run and s3.object.put, so ingested text cannot reach a tool call directly.",
+      "mitigation_source": "catalogue, fitted",
+      "score": 3,
+      "band": "critical",
+      "reason": "Observed tool_names includes acting tools while processing support exports and Jira tickets containing potentially untrusted content.",
       "mitigation_key": "untrusted_content_reaches_context"
     },
     "grant_exercise_gap": {
       "outcome": "INSUFFICIENT_EVIDENCE",
       "missing": [
         {
-          "input": "tool_reach.mcp_servers_declared",
+          "input": "mcp_servers_declared",
           "status": "BLIND",
           "reason": "GATEWAY_MANAGED"
         }
@@ -96,33 +96,33 @@
     "text_signals": {
       "outcome": "PROFILED",
       "clamp": "model said 3; floored at 4 -- agent-authored text cannot alone cause a refusal",
-      "mitigation": "Treat the claim as unevidenced and remove it from the skill description; compliance status belongs in the approved catalogue, not in text the agent controls.",
+      "mitigation": "Treat the claim as unevidenced and remove it from the skill description in audit-status; compliance status belongs in the approved catalogue, not in text the agent controls.",
       "mitigation_source": "catalogue, fitted",
       "score": 4,
       "band": "moderate",
-      "reason": "Agent-authored text in `skills_inventory` attempts to assert compliance exemptions and describes unattended bulk operations over sensitive data.",
+      "reason": "Observed skills_inventory contains self-attestation of compliance in the audit-status skill and describes unattended bulk operations over sensitive data.",
       "mitigation_key": "self_attestation_of_compliance"
     }
   },
   "keyed_on": {
-    "bundle_sha256": "bdfd3cbd30347546",
+    "bundle_sha256": "5375274ea46d3f0a",
     "bundle_id": "bnd-01J9A2R7XKD",
     "rule_pack_version": 14,
-    "prompt_version": "v2.1",
+    "prompt_version": "v2.2",
     "model": "gemini-3.5-flash-lite",
     "catalogue_version": 1
   },
   "usage": {
-    "promptTokenCount": 4000,
-    "candidatesTokenCount": 783,
-    "totalTokenCount": 4783,
+    "promptTokenCount": 4024,
+    "candidatesTokenCount": 748,
+    "totalTokenCount": 4772,
     "promptTokensDetails": [
       {
         "modality": "TEXT",
-        "tokenCount": 4000
+        "tokenCount": 4024
       }
     ],
     "serviceTier": "standard"
   },
-  "profiled_at": "2026-09-10T06:30:27+00:00"
+  "profiled_at": "2026-09-11T02:17:09+00:00"
 }
